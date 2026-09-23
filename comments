@@ -1,0 +1,7 @@
+echo # STM32_Protocals > README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/Maheshbavage/STM32_Protocals.git
+git push -u origin main
