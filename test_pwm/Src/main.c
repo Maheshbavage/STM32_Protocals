@@ -17,46 +17,114 @@
  */
 
 #include <stdint.h>
-
-
-
 #include "timer.h"
+#include "gpio.h"
 
-#define TIM_CLK_HZ      16000000UL
-#define PWM_FREQ_HZ     25000UL
-#define DEAD_TIME_US    1UL
+#define TIM_CLK_HZ       16000000UL
+#define PWM_FREQ_HZ      25000UL
+#define DEAD_TIME_NS     500UL
 
-#define PWM_ARR         (TIM_CLK_HZ / (2UL * PWM_FREQ_HZ))            // 320
-#define DEAD_TICKS      ((TIM_CLK_HZ / 1000000UL) * DEAD_TIME_US)     // 16
+// Center-aligned PWM frequency
+#define PWM_ARR          ((TIM_CLK_HZ / (2UL * PWM_FREQ_HZ)) - 1UL)
+
+// 500 ns = 8 timer ticks at 16 MHz
+#define DEAD_TICKS       ((TIM_CLK_HZ * DEAD_TIME_NS) / 1000000000UL)
 
 void TIM1_PWM_Init(void)
 {
-    RCC->APB2ENR |= (1 << 0);
+    // Enable TIM1 clock
+    RCC->APB2ENR |= (1U << 0);
 
+    // Stop timer
+    TIM1->CR1 &= ~(1U << 0);
+
+    // Prescaler = 0
     TIM1->PSC = 0;
+
+    // Set ARR
     TIM1->ARR = PWM_ARR;
 
-    TIM1->CR1 &= ~(3 << 5);
-    TIM1->CR1 |=  (1 << 5);     // center-aligned mode 1
-    TIM1->CR1 |=  (1 << 7);     // ARPE
+    // Center aligned mode 1
+    TIM1->CR1 &= ~(3U << 5);
+    TIM1->CR1 |= (1U << 5);
 
-    TIM1->CCR1 = (PWM_ARR / 2) - (DEAD_TICKS / 2);
-    TIM1->CCR2 = (PWM_ARR / 2) + (DEAD_TICKS / 2);
+    // Clock division = DIV1
+    TIM1->CR1 &= ~(3U << 8);
 
-    TIM1->CCMR1 &= ~(7 << 4);
-    TIM1->CCMR1 |=  (6 << 4);   // CH1 PWM mode 1
-    TIM1->CCMR1 |=  (1 << 3);
+    // Enable ARR preload
+    TIM1->CR1 |= (1U << 7);
 
-    TIM1->CCMR1 &= ~(7 << 12);
-    TIM1->CCMR1 |=  (7 << 12);  // CH2 PWM mode 2
-    TIM1->CCMR1 |=  (1 << 11);
+    // Configure CH1 PWM mode 1
+    TIM1->CCMR1 &= ~(7U << 4);
+    TIM1->CCMR1 |= (6U << 4);
 
-    TIM1->CCER |= (1 << 0) | (1 << 4);   // enable CH1 and CH2
+    // Enable CCR1 preload
+    TIM1->CCMR1 |= (1U << 3);
 
-    TIM1->BDTR |= (1 << 15);    // MOE
-    TIM1->EGR  |= (1 << 0);     // UG
-    TIM1->CR1  |= (1 << 0);     // CEN
+    // 50% duty cycle
+    TIM1->CCR1 = (PWM_ARR + 1U) / 2U;
+
+    // Enable CH1 and CH1N outputs
+    TIM1->CCER |= (1U << 0);
+    TIM1->CCER |= (1U << 2);
+
+    // Set 500 ns hardware dead time
+    TIM1->BDTR &= ~(0xFFU);
+    TIM1->BDTR |= DEAD_TICKS;
+
+    // Enable main output
+    TIM1->BDTR |= (1U << 15);
+
+    // Generate update event
+    TIM1->EGR |= (1U << 0);
+
+    // Start timer
+    TIM1->CR1 |= (1U << 0);
 }
+
+
+
+//#include <stdint.h>
+//
+//
+//
+//#include "timer.h"
+//
+//#define TIM_CLK_HZ      16000000UL
+//#define PWM_FREQ_HZ     25000UL
+//#define DEAD_TIME_US    1UL
+//
+//#define PWM_ARR         (TIM_CLK_HZ / (2UL * PWM_FREQ_HZ))            // 320
+//#define DEAD_TICKS      ((TIM_CLK_HZ / 1000000UL) * DEAD_TIME_US)     // 16
+//
+//void TIM1_PWM_Init(void)
+//{
+//    RCC->APB2ENR |= (1 << 0);
+//
+//    TIM1->PSC = 0;
+//    TIM1->ARR = PWM_ARR;
+//
+//    TIM1->CR1 &= ~(3 << 5);
+//    TIM1->CR1 |=  (1 << 5);     // center-aligned mode 1
+//    TIM1->CR1 |=  (1 << 7);     // ARPE
+//
+//    TIM1->CCR1 = (PWM_ARR / 2) - (DEAD_TICKS / 2);
+//    TIM1->CCR2 = (PWM_ARR / 2) + (DEAD_TICKS / 2);
+//
+//    TIM1->CCMR1 &= ~(7 << 4);
+//    TIM1->CCMR1 |=  (6 << 4);   // CH1 PWM mode 1
+//    TIM1->CCMR1 |=  (1 << 3);
+//
+//    TIM1->CCMR1 &= ~(7 << 12);
+//    TIM1->CCMR1 |=  (7 << 12);  // CH2 PWM mode 2
+//    TIM1->CCMR1 |=  (1 << 11);
+//
+//    TIM1->CCER |= (1 << 0) | (1 << 4);   // enable CH1 and CH2
+//
+//    TIM1->BDTR |= (1 << 15);    // MOE
+//    TIM1->EGR  |= (1 << 0);     // UG
+//    TIM1->CR1  |= (1 << 0);     // CEN
+//}
 //void TIM1_CH1_PWM_Init(void)
 //{
 //// enable timer clock
@@ -140,7 +208,7 @@ void TIM1_PWM_Init(void)
 
 
 //#include <stdint.h>
-#include "gpio.h"
+//#include "gpio.h"
 //#include "timer.h"
 
 
